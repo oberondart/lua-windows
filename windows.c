@@ -8,6 +8,7 @@
 
 // use the command below to compile!
 // tcc -shared -o mywinapi.dll mywinapi.c -I"C:\Users\Admin\Desktop\lua" -L"C:\Users\Admin\Desktop\lua" -llua54 -luser32 -lkernel32
+// I know not everyone uses TCC, but I just use it as a fast way to test C programs :>
 
 // this will be our message box function!
 static int messageBox(lua_State *L) {

@@ -6,9 +6,33 @@
 #include <string.h>
 #include <stdint.h> 
 
+/*
+    MIT License
+
+Copyright (c) 2026 devenoch
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
+
 // use the command below to compile!
 // tcc -shared -o mywinapi.dll mywinapi.c -I"C:\Users\Admin\Desktop\lua" -L"C:\Users\Admin\Desktop\lua" -llua54 -luser32 -lkernel32
-// I know not everyone uses TCC, but I just use it as a fast way to test C programs :>
 
 // this will be our message box function!
 static int messageBox(lua_State *L) {
@@ -213,6 +237,128 @@ static int virtualFree(lua_State *L) {
     
 }
 
+// process function! yipe cool stuff :>
+static int createProcess(lua_State *L) {
+    if (lua_type(L, 1) != LUA_TTABLE) {
+        return luaL_error(L, "argument 1 in createProcess() must be table {}");
+    }
+
+    // command field
+    lua_getfield(L, 1, "command");
+    if (lua_type(L, -1) != LUA_TSTRING) {
+        return luaL_error(L, "error: command field is required and expects type string");
+    }
+    const char *command = lua_tostring(L, 1);
+    lua_pop(L, 1);
+
+    // flags field
+    lua_getfield(L, 1, "flags");
+    DWORD flags;
+    if (lua_isnil(L, -1)) {
+        flags = 0;
+    } else {
+        flags = (DWORD)lua_tointeger(L, -1);
+    }
+    lua_pop(L, 1);
+
+    // inherit field, optional, default to FALSE
+    lua_getfield(L, 1, "inherit");
+    BOOL inherit;
+    if (lua_isnil(L, -1)) {
+        inherit = FALSE;
+    } else {
+        inherit = (BOOL)lua_toboolean(L, -1);
+    }
+    lua_pop(L, 1);
+
+    // workingDir field, optional, default to NULL
+    lua_getfield(L, 1, "workingDir");
+    LPCSTR workingDir;
+    if (lua_isnil(L, -1)) {
+        workingDir = NULL;
+    } else {
+        workingDir = lua_tostring(L, -1);
+    }
+    lua_pop(L, 1);
+
+    // now, we copy command into a wrtiable malloc() buffer
+    size_t commandLen = strlen(command) + 1;
+    char *commandBuffer = malloc(commandLen);
+    if (commandBuffer == NULL) {
+        return luaL_error(L, "error: malloc() failure for command buffer");
+    }
+    memcpy(commandBuffer, command, commandLen);
+
+    // startup info initaliziting...
+    STARTUPINFO si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(STARTUPINFO);
+
+    // process info initaliziting... windows takes care of it! for once...
+    PROCESS_INFORMATION pi;
+
+    // function call
+    BOOL result = CreateProcess(
+        NULL,
+        commandBuffer,
+        NULL,
+        NULL,
+        inherit,
+        flags,
+        NULL,
+        workingDir,
+        &si,
+        &pi
+    );
+
+    // quickly! free buffer! no leaks on my watch :3
+    free(commandBuffer);
+    commandBuffer = NULL;
+
+    if (!result) {
+        return luaL_error(L, "error: CreateProcess() failure at: %lu", GetLastError());
+    }
+
+    lua_newtable(L);
+
+    lua_pushlightuserdata(L, pi.hProcess);
+    lua_setfield(L, -2, "processHandle");
+
+    lua_pushlightuserdata(L, pi.hThread);
+    lua_setfield(L, -2, "threadHandle");
+
+    lua_pushinteger(L, pi.dwProcessId);
+    lua_setfield(L, -2, "processId");
+
+    lua_pushinteger(L, pi.dwThreadId);
+    lua_setfield(L, -2, "threadId");
+
+    return 1;
+}
+
+// our handle closer function, needed to clean up all our used up handles
+static int closeHandle(lua_State *L) {
+    if (lua_type(L, 1) != LUA_TLIGHTUSERDATA) {
+        return luaL_error(L, "error: expected handle, got %s",
+                lua_typename(L, lua_type(L, 1)));
+    }
+
+    HANDLE handle = (HANDLE)lua_touserdata(L, 1);
+
+    if (handle == NULL) {
+        return luaL_error(L, "error: handled expected, got NULL");
+    }
+
+    BOOL result = CloseHandle(handle);
+
+    if (result == FALSE) {
+        return luaL_error(L, "error: CloseHandle() failed: %lu", GetLastError());
+    }
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
 static const luaL_Reg lib[] = {
     { "messageBox",   messageBox   },
     { "buffer",       buffer       },
@@ -223,7 +369,8 @@ static const luaL_Reg lib[] = {
     { "heapDestroy",  heapDestroy  },
     { "virtualAlloc", virtualAlloc },
     { "virtualFree", virtualFree },
-    { NULL, NULL }
+    { "createProcess", createProcess },
+    { "closeHandle", closeHandle}
 };
 
 __declspec(dllexport) int luaopen_mywinapi(lua_State *L) {

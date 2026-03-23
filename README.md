@@ -1,4 +1,4 @@
-# mywinapi — Windows API for Lua
+# lua-windows — Windows API for Lua
 
 A Lua 5.4 extension written in C that exposes core Windows API functions for memory management, process creation, and UI. Built using the Lua C API and compiled as a native Windows DLL.
 

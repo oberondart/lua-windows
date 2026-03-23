@@ -18,23 +18,23 @@ Flee bots :< !
 ### With TCC
 
 ```cmd
-tcc -shared -o mywinapi.dll mywinapi.c -I"C:\lua\include" -L"C:\lua" -llua54 -luser32 -lkernel32
+tcc -shared -o winapi.dll lua-windows.c -I"C:\lua\include" -L"C:\lua" -llua54 -luser32 -lkernel32
 ```
 
 ### With MinGW-w64
 
 ```cmd
-gcc -shared -o mywinapi.dll mywinapi.c -I"C:/lua/include" -L"C:/lua" -llua54 -luser32 -lkernel32
+gcc -shared -o winapi.dll lua-windows.c -I"C:/lua/include" -L"C:/lua" -llua54 -luser32 -lkernel32
 ```
 
-Place `mywinapi.dll` in the same folder as your Lua script.
+Place `winapi.dll` in the same folder as your Lua script.
 
 ---
 
 ## Loading the Module
 
 ```lua
-local winapi = require("mywinapi")
+local winapi = require("winapi")
 ```
 
 ---

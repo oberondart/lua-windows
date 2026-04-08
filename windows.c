@@ -62,80 +62,38 @@ static int buffer(lua_State *L) {
     return 1;
 }
 
-int pointer(lua_State *L) { // pointers in Lua! Yay! :3
-    int ptr = (int *)malloc(sizeof(int));
-    if (*ptr == NULL) {
-        return luaL_error(L, "error: malloc failed");
+static int pointer(lua_State *L) {
+    // int* not int, no dereference on NULL check
+    int *ptr = (int *)malloc(sizeof(int));
+    if (ptr == NULL) {
+        return luaL_error(L, "malloc failed");
     }
 
     printf("enter required number: ");
     scanf("%d", ptr);
 
-    lua_pushboolean(L, 1);
+    // push the pointer so Lua can hold and return it
+    lua_pushlightuserdata(L, ptr);
     return 1;
-
-    /*
-        WARNING: NEVER USE POINTER AGAIN AFTER USING FREEPOINTER!!!
-        THE POINTER IS NOW INVISIBLE TO LUA
-        Don't worry I'll use full userdata later :3
-        Just for you :>
-    */
 }
 
-int freePointer(lua_State *L) {
-    // conforming that argument 1 is light userdata
+static int freePointer(lua_State *L) {
     if (lua_type(L, 1) != LUA_TLIGHTUSERDATA) {
-        return luaL_error(L, "error: expected pointer got %s",
+        return luaL_error(L, "expected pointer, got %s",
             lua_typename(L, lua_type(L, 1)));
     }
 
-    ptr = (int)lua_pushlightuserdata(L, 1);
-    // confirm pointer is null or not
+    // lua_touserdata reads, cast to int* not int
+    int *ptr = (int *)lua_touserdata(L, 1);
+
     if (ptr == NULL) {
-        return luaL_error(L, "error: pointer is NULL");
+        return luaL_error(L, "pointer is NULL");
     }
 
     free(ptr);
     ptr = NULL;
 
-    lua_pushboolean(L, 1)
-    return 1;
-}
-
-// heaps here!
-
-static int createHeap(lua_State *L) {
-    int options = (int)luaL_optinteger(L, 1, HEAP_CREATE_ENABLE_EXECUTE); // options are the first arguments
-    size_t init_size = (size_t)luaL_checkinteger(L, 2); // get size of heap of second argument
-    size_t max_size = (size_t)luaL_checkinteger(L, 3); // get max size of heap as third and last argument
-
-    HANDLE hHeap = HeapCreate((DWORD)options, init_size, max_size);
-    if (hHeap == NULL) {
-// this will be our message box function!
-static int messageBox(lua_State *L) {
-    const char *text = luaL_checkstring(L, 1); // first arg, text for message box
-    const char *caption = luaL_checkstring(L, 2); // second arg, caption for message box, simple!
-
-    int flags = (int)luaL_optinteger(L, 3, MB_OK); // default is mb_ok
-
-    int result = MessageBoxA(NULL, text, caption, (UINT)flags);
-
-    lua_pushinteger(L, result);
-    return 1;
-}
-
-// buffer creator!
-static int buffer(lua_State *L) {
-    size_t size = (size_t)luaL_checkinteger(L, 1); // get size of buffer for first argument
-    char *buf = (char *)malloc(size); // allocate memory
-    if (!buf) {
-        return luaL_error(L, "allocation failed");
-    }
-
-    memset(buf, 0, size);
-    lua_pushstring(L, buf);
-    free(buf);
-
+    lua_pushboolean(L, 1); // semicolon
     return 1;
 }
 
@@ -325,7 +283,7 @@ static int createProcess(lua_State *L) {
     if (lua_type(L, -1) != LUA_TSTRING) {
         return luaL_error(L, "error: command field is required and expects type string");
     }
-    const char *command = lua_tostring(L, 1);
+    const char *command = lua_tostring(L, -1);
     lua_pop(L, 1);
 
     // flags field
@@ -447,7 +405,10 @@ static const luaL_Reg lib[] = {
     { "virtualAlloc", virtualAlloc },
     { "virtualFree", virtualFree },
     { "createProcess", createProcess },
-    { "closeHandle", closeHandle}
+    { "closeHandle", closeHandle},
+    { "pointer", pointer },
+    { "freePointer", freePointer},
+    {NULL, NULL}
 };
 
 __declspec(dllexport) int luaopen_mywinapi(lua_State *L) {

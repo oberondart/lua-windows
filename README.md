@@ -1,8 +1,7 @@
-# lua-windows — Windows API for Lua
+# lua-windows
 
-A Lua 5.4 extension written in C that exposes core Windows API functions for memory management, process creation, and UI. Built using the Lua C API and compiled as a native Windows DLL.
+A Lua 5.4 extension written in C that exposes Windows API functions for UI, memory management, and process creation. Built using the Lua C API and compiled as a native Windows DLL.
 
-Flee bots :< !
 ---
 
 ## Requirements
@@ -18,23 +17,23 @@ Flee bots :< !
 ### With TCC
 
 ```cmd
-tcc -shared -o winapi.dll lua-windows.c -I"C:\lua\include" -L"C:\lua" -llua54 -luser32 -lkernel32
+tcc -shared -o mywinapi.dll mywinapi.c -I"C:\lua\include" -L"C:\lua" -llua54 -luser32 -lkernel32
 ```
 
 ### With MinGW-w64
 
 ```cmd
-gcc -shared -o winapi.dll lua-windows.c -I"C:/lua/include" -L"C:/lua" -llua54 -luser32 -lkernel32
+gcc -shared -o mywinapi.dll mywinapi.c -I"C:/lua/include" -L"C:/lua" -llua54 -luser32 -lkernel32
 ```
 
-Place `winapi.dll` in the same folder as your Lua script.
+Place `mywinapi.dll` in the same folder as your Lua script.
 
 ---
 
 ## Loading the Module
 
 ```lua
-local winapi = require("winapi")
+local winapi = require("mywinapi")
 ```
 
 ---
@@ -90,14 +89,61 @@ local data = winapi.buffer(size)
 **Example:**
 ```lua
 local data = winapi.buffer(256)
-print(#data) -- 256
+print(#data)   -- 256
+```
+
+---
+
+### pointer
+
+Allocates an integer on the heap, prompts the user to enter a number via `scanf`, and returns the pointer as light userdata.
+
+```lua
+local ptr = winapi.pointer()
+```
+
+Takes no arguments. Prompts the terminal for an integer. Returns a light userdata pointer.
+
+> **Warning:** After calling `freePointer`, never use the returned pointer again. Lua still holds the address but the memory no longer belongs to you.
+
+> **Note:** Requires the script to be run from `cmd.exe` or a terminal with stdin open.
+
+**Example:**
+```lua
+local ptr = winapi.pointer()
+-- terminal: enter required number: 42
+
+winapi.freePointer(ptr)
+```
+
+---
+
+### freePointer
+
+Frees a pointer previously returned by `pointer`.
+
+```lua
+local ok = winapi.freePointer(ptr)
+```
+
+| Argument | Type | Required |
+|---|---|---|
+| ptr | light userdata | yes |
+
+Returns `true` on success. After this call the pointer is dangling — Lua still holds the address but the memory has been released. Never pass it to any function again.
+
+**Example:**
+```lua
+local ptr = winapi.pointer()
+winapi.freePointer(ptr)
+-- ptr must never be used again after this point
 ```
 
 ---
 
 ### getProcessHeap
 
-Returns a handle to the default process heap. Every Windows process has one automatically — it exists before your program's first line runs.
+Returns a handle to the default process heap. Every Windows process has one automatically.
 
 ```lua
 local heap = winapi.getProcessHeap()
@@ -107,7 +153,7 @@ Takes no arguments. Returns a heap handle (light userdata). Never call `heapDest
 
 **Example:**
 ```lua
-local heap = winapi.getProcessHeap()
+local heap  = winapi.getProcessHeap()
 local block = winapi.allocHeap(heap, 0, 256)
 winapi.freeHeap(heap, block)
 ```
@@ -116,7 +162,7 @@ winapi.freeHeap(heap, block)
 
 ### createHeap
 
-Creates a new private heap isolated from the rest of the process. All allocations inside it can be freed in one `heapDestroy` call.
+Creates a new private heap isolated from the rest of the process.
 
 ```lua
 local heap = winapi.createHeap(options, init_size, max_size)
@@ -178,7 +224,7 @@ local ok = winapi.freeHeap(heap, block)
 | heap | light userdata | yes |
 | block | light userdata | yes |
 
-Returns `true` on success. The heap handle must be the same one used in `allocHeap`. Passing the wrong heap corrupts both heaps silently.
+Returns `true` on success. The heap handle must be the same one used in `allocHeap`.
 
 **Example:**
 ```lua
@@ -237,10 +283,7 @@ Returns a pointer to the allocated region (light userdata). Size must be greater
 -- Let Windows choose the address
 local mem = winapi.virtualAlloc(nil, 4096)
 
--- Request a specific address
-local mem = winapi.virtualAlloc(0x10000000, 4096)
-
--- Reserve without committing (no physical memory yet)
+-- Reserve without committing
 local MEM_RESERVE   = 0x2000
 local PAGE_NOACCESS = 0x01
 local mem = winapi.virtualAlloc(nil, 1024 * 1024, MEM_RESERVE, PAGE_NOACCESS)
@@ -311,10 +354,8 @@ local info = winapi.createProcess(options)
 **Example:**
 ```lua
 local info = winapi.createProcess({ command = "notepad.exe" })
-
 print("PID: " .. info.processId)
 
--- always close handles when done
 winapi.closeHandle(info.processHandle)
 winapi.closeHandle(info.threadHandle)
 ```
@@ -337,7 +378,7 @@ winapi.closeHandle(info.threadHandle)
 
 ### closeHandle
 
-Closes a Windows handle returned by `createProcess` or any other function that produces a handle. Must be called on `processHandle` and `threadHandle` from `createProcess` when you are done with them.
+Closes a Windows handle. Must be called on `processHandle` and `threadHandle` returned by `createProcess`.
 
 ```lua
 local ok = winapi.closeHandle(handle)
@@ -363,44 +404,44 @@ winapi.closeHandle(info.threadHandle)
 ```lua
 local winapi = require("mywinapi")
 
--- -------------------------------------------------------
--- MessageBox
--- -------------------------------------------------------
 local MB_YESNO        = 0x04
 local MB_ICONQUESTION = 0x20
 local IDYES           = 6
 
-local answer = winapi.messageBox("Run memory test?", "mywinapi", MB_YESNO + MB_ICONQUESTION)
+local answer = winapi.messageBox("Run tests?", "mywinapi", MB_YESNO + MB_ICONQUESTION)
 
 if answer == IDYES then
 
-    -- -------------------------------------------------------
-    -- Default process heap
-    -- -------------------------------------------------------
+    -- pointer
+    print("=== pointer ===")
+    local ptr = winapi.pointer()
+    -- terminal: enter required number: 99
+    winapi.freePointer(ptr)
+    print("pointer test passed")
+
+    -- default process heap
+    print("=== heap ===")
     local heap  = winapi.getProcessHeap()
     local block = winapi.allocHeap(heap, 0, 1024)
     winapi.freeHeap(heap, block)
     print("heap test passed")
 
-    -- -------------------------------------------------------
-    -- Private heap — destroy frees everything at once
-    -- -------------------------------------------------------
+    -- private heap
+    print("=== private heap ===")
     local myHeap = winapi.createHeap(0, 4096, 0)
     local b1     = winapi.allocHeap(myHeap, 0, 128)
     local b2     = winapi.allocHeap(myHeap, 0, 256)
     winapi.heapDestroy(myHeap)
     print("private heap test passed")
 
-    -- -------------------------------------------------------
-    -- Virtual memory
-    -- -------------------------------------------------------
+    -- virtual memory
+    print("=== virtual memory ===")
     local mem = winapi.virtualAlloc(nil, 4096)
     winapi.virtualFree(mem)
     print("virtual memory test passed")
 
-    -- -------------------------------------------------------
-    -- Process creation
-    -- -------------------------------------------------------
+    -- process creation
+    print("=== process ===")
     local info = winapi.createProcess({ command = "notepad.exe" })
     print("launched notepad, PID: " .. info.processId)
     winapi.closeHandle(info.processHandle)
@@ -413,19 +454,28 @@ end
 
 ---
 
-## Key Concepts
+## Handle Ownership Rules
 
-### The Lua Stack
-Every value passed between Lua and C goes through a virtual stack. Arguments come in at positions `1, 2, 3...` and return values are pushed before returning. The number returned from each C function tells Lua how many values were pushed.
+```
+getProcessHeap()   →  never destroy — Windows owns it
+createHeap()       →  destroy with heapDestroy() when done
+allocHeap()        →  free with freeHeap() before heapDestroy()
+virtualAlloc()     →  free with virtualFree()
+createProcess()    →  close processHandle and threadHandle with closeHandle()
+pointer()          →  free with freePointer() — never use after freeing
+```
 
-### Light Userdata
-Windows `HANDLE` and pointer values are stored in Lua as light userdata — an opaque pointer Lua holds but does not garbage collect. Always validate with `lua_type(L, n) == LUA_TLIGHTUSERDATA` before use.
+---
 
-### Validate Before You Push
-Always check arguments and API return values before pushing anything onto the Lua stack. A bad value reaching a Windows API call does not produce a clean error — it corrupts memory silently.
+## Light Userdata Warning
 
-### Handle Ownership
-Handles returned by `createProcess` must be closed with `closeHandle`. The process heap handle from `getProcessHeap` must never be destroyed. Private heaps from `createHeap` must be destroyed with `heapDestroy` when done.
+All handles and pointers in this library are returned as light userdata — an opaque pointer Lua holds but does not garbage collect. This means:
+
+- Lua will never free them automatically
+- After freeing, Lua still holds the address — the pointer is dangling
+- Passing a freed pointer to any function produces undefined behaviour
+
+Always free handles and pointers explicitly using the corresponding free function when you are done with them.
 
 ---
 
